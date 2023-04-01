@@ -1,4 +1,4 @@
-use std::net::TcpListener;
+use std::{collections::HashMap, net::TcpListener};
 
 #[tokio::test]
 async fn health_check_works() {
@@ -14,6 +14,69 @@ async fn health_check_works() {
 
     assert!(response.status().is_success());
     assert_eq!(Some(0), response.content_length());
+}
+
+#[tokio::test]
+async fn subscribe_returns_a_200_for_valid_form_data() {
+    let address = spawn_app();
+    let client = reqwest::Client::new();
+
+    let mut form = HashMap::new();
+    form.insert("name", "test name");
+    form.insert("email", "testname@gmail.com");
+
+    let response = client
+        .post(format!("{address}/subscriptions"))
+        .form(&form)
+        .send()
+        .await
+        .expect("request to be succesful");
+
+    assert_eq!(200, response.status().as_u16());
+}
+
+#[tokio::test]
+async fn subscribe_returns_a_400_when_data_is_missing() {
+    let address = spawn_app();
+    let client = reqwest::Client::new();
+    let test_cases = vec![
+        (Some("test name"), None, "missing the email"),
+        (None, Some("testname@gmail.com"), "missing the name"),
+        (None, None, "missing both name and email"),
+    ];
+
+    for (name, email, error_message) in test_cases {
+        let mut form = HashMap::new();
+        form.insert("name", name);
+        form.insert("email", email);
+
+        let response = client
+            .post(format!("{address}/subscriptions"))
+            .form(&form)
+            .send()
+            .await
+            .expect("request to be succesful");
+
+        assert_eq!(
+            400,
+            response.status().as_u16(),
+            "the api did not fail with 400 Bad Request with payload={:?}",
+            form
+        );
+
+        // let response_body = std::str::from_utf8(
+        //     response
+        //         .bytes()
+        //         .await
+        //         .expect("to have a response body")
+        //         .(),
+        // );
+        // assert_eq!(
+        //     error_message, response_body,
+        //     "the api did not return the expected error message '{}' got '{}' instead",
+        //     error_message, response_body
+        // );
+    }
 }
 
 /// spins up an instance of the application and returns its address

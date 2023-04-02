@@ -1,5 +1,8 @@
 use std::{collections::HashMap, net::TcpListener};
 
+use sqlx::{Connection, PgConnection};
+use zero2prod::config::get_configuration;
+
 #[tokio::test]
 async fn health_check_works() {
     let address = spawn_app();
@@ -19,6 +22,11 @@ async fn health_check_works() {
 #[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {
     let address = spawn_app();
+    let config = get_configuration().expect("valid configuration");
+    let connection_string = config.database.connection_string();
+    let mut connection = PgConnection::connect(&connection_string)
+        .await
+        .expect("connect to postgresql");
     let client = reqwest::Client::new();
 
     let mut form = HashMap::new();
@@ -33,6 +41,14 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
         .expect("request to be succesful");
 
     assert_eq!(200, response.status().as_u16());
+
+    let saved = sqlx::query!("select email, name from subscriptions")
+        .fetch_one(&mut connection)
+        .await
+        .expect("to read a subscription");
+
+    assert_eq!(saved.email, "testname@gmail.com");
+    assert_eq!(saved.name, "test name");
 }
 
 #[tokio::test]
@@ -89,7 +105,7 @@ fn spawn_app() -> String {
         .expect("to have a local address")
         .port();
 
-    let server = zero2prod::run(listener).expect("to bind server to the address");
+    let server = zero2prod::startup::run(listener).expect("to bind server to the address");
 
     let _ = tokio::spawn(server);
 

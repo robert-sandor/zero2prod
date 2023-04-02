@@ -1,8 +1,10 @@
+use once_cell::sync::Lazy;
 use std::{collections::HashMap, net::TcpListener};
 
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 use zero2prod::config::{get_configuration, DatabaseSettings};
+use zero2prod::telemetry::{get_subscriber, init_subscriber};
 
 #[tokio::test]
 async fn health_check_works() {
@@ -96,6 +98,9 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
     }
 }
 
+static TRACING: Lazy<()> =
+    Lazy::new(|| init_subscriber(get_subscriber("test".into(), "debug".into())));
+
 pub struct TestApp {
     pub address: String,
     pub db_pool: PgPool,
@@ -104,6 +109,8 @@ pub struct TestApp {
 /// spins up an instance of the application and returns its address
 /// example: http://localhost:8080
 async fn spawn_app() -> TestApp {
+    Lazy::force(&TRACING);
+
     let listener = TcpListener::bind("127.0.0.1:0").expect("to find a random port to bind to");
 
     let port = listener

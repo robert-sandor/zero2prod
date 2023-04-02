@@ -1,4 +1,5 @@
 use once_cell::sync::Lazy;
+use secrecy::ExposeSecret;
 use std::{collections::HashMap, net::TcpListener};
 
 use sqlx::{Connection, Executor, PgConnection, PgPool};
@@ -27,7 +28,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     let test_app = spawn_app().await;
     let config = get_configuration().expect("valid configuration");
     let connection_string = config.database.connection_string();
-    let mut connection = PgConnection::connect(&connection_string)
+    let mut connection = PgConnection::connect(&connection_string.expose_secret())
         .await
         .expect("connect to postgresql");
     let client = reqwest::Client::new();
@@ -98,17 +99,24 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
     }
 }
 
-static TRACING: Lazy<()> =
-    Lazy::new(|| {
-        let default_filter_level = "info".to_string();
-        let subscriber_name = "test".to_string();
+static TRACING: Lazy<()> = Lazy::new(|| {
+    let default_filter_level = "info".to_string();
+    let subscriber_name = "test".to_string();
 
-        if std::env::var("TEST_LOG").is_ok() {
-            init_subscriber(get_subscriber(subscriber_name, default_filter_level, std::io::stdout))
-        } else {
-            init_subscriber(get_subscriber(subscriber_name, default_filter_level, std::io::sink))
-        }
-    });
+    if std::env::var("TEST_LOG").is_ok() {
+        init_subscriber(get_subscriber(
+            subscriber_name,
+            default_filter_level,
+            std::io::stdout,
+        ))
+    } else {
+        init_subscriber(get_subscriber(
+            subscriber_name,
+            default_filter_level,
+            std::io::sink,
+        ))
+    }
+});
 
 pub struct TestApp {
     pub address: String,
@@ -140,7 +148,7 @@ async fn spawn_app() -> TestApp {
 }
 
 async fn configure_database(config: &DatabaseSettings) -> PgPool {
-    let mut connection = PgConnection::connect(&config.connection_string_no_db())
+    let mut connection = PgConnection::connect(&config.connection_string_no_db().expose_secret())
         .await
         .expect("to connect to the database");
 
@@ -149,7 +157,7 @@ async fn configure_database(config: &DatabaseSettings) -> PgPool {
         .await
         .expect("to be able to create the database");
 
-    let db_pool = PgPool::connect(&config.connection_string())
+    let db_pool = PgPool::connect(&config.connection_string().expose_secret())
         .await
         .expect("to be able to connect to the database");
 

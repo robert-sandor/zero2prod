@@ -1,16 +1,17 @@
 use std::{collections::HashMap, net::TcpListener};
 
-use sqlx::{Connection, PgConnection};
-use zero2prod::config::get_configuration;
+use sqlx::{Connection, Executor, PgConnection, PgPool};
+use uuid::Uuid;
+use zero2prod::config::{get_configuration, DatabaseSettings};
 
 #[tokio::test]
 async fn health_check_works() {
-    let address = spawn_app();
+    let test_app = spawn_app().await;
 
     let client = reqwest::Client::new();
 
     let response = client
-        .get(format!("{address}/health_check"))
+        .get(format!("{}/health_check", test_app.address))
         .send()
         .await
         .expect("request to be succesful");
@@ -21,7 +22,7 @@ async fn health_check_works() {
 
 #[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {
-    let address = spawn_app();
+    let test_app = spawn_app().await;
     let config = get_configuration().expect("valid configuration");
     let connection_string = config.database.connection_string();
     let mut connection = PgConnection::connect(&connection_string)
@@ -34,7 +35,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     form.insert("email", "testname@gmail.com");
 
     let response = client
-        .post(format!("{address}/subscriptions"))
+        .post(format!("{}/subscriptions", test_app.address))
         .form(&form)
         .send()
         .await
@@ -53,7 +54,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
 
 #[tokio::test]
 async fn subscribe_returns_a_400_when_data_is_missing() {
-    let address = spawn_app();
+    let test_app = spawn_app().await;
     let client = reqwest::Client::new();
     let test_cases = vec![
         (Some("test name"), None, "missing the email"),
@@ -67,7 +68,7 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
         form.insert("email", email);
 
         let response = client
-            .post(format!("{address}/subscriptions"))
+            .post(format!("{}/subscriptions", test_app.address))
             .form(&form)
             .send()
             .await
@@ -95,19 +96,51 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
     }
 }
 
+pub struct TestApp {
+    pub address: String,
+    pub db_pool: PgPool,
+}
+
 /// spins up an instance of the application and returns its address
 /// example: http://localhost:8080
-fn spawn_app() -> String {
+async fn spawn_app() -> TestApp {
     let listener = TcpListener::bind("127.0.0.1:0").expect("to find a random port to bind to");
 
     let port = listener
         .local_addr()
         .expect("to have a local address")
         .port();
+    let address = format!("http://127.0.0.1:{port}");
 
-    let server = zero2prod::startup::run(listener).expect("to bind server to the address");
+    let mut config = get_configuration().expect("to read configuration");
+    config.database.database_name = Uuid::new_v4().to_string();
+    let db_pool = configure_database(&config.database).await;
+    let server =
+        zero2prod::startup::run(listener, db_pool.clone()).expect("to bind server to the address");
 
     let _ = tokio::spawn(server);
 
-    format!("http://127.0.0.1:{port}")
+    TestApp { address, db_pool }
+}
+
+async fn configure_database(config: &DatabaseSettings) -> PgPool {
+    let mut connection = PgConnection::connect(&config.connection_string_no_db())
+        .await
+        .expect("to connect to the database");
+
+    connection
+        .execute(format!(r#"create database "{}""#, config.database_name).as_str())
+        .await
+        .expect("to be able to create the database");
+
+    let db_pool = PgPool::connect(&config.connection_string())
+        .await
+        .expect("to be able to connect to the database");
+
+    sqlx::migrate!("./migrations")
+        .run(&db_pool)
+        .await
+        .expect("to be able to migrate the database");
+
+    db_pool
 }

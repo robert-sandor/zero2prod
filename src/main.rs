@@ -9,7 +9,11 @@ use zero2prod::{
 
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
-    init_subscriber(get_subscriber("zero2prod".into(), "info".into()));
+    init_subscriber(get_subscriber(
+        "zero2prod".into(),
+        "info".into(),
+        std::io::stdout,
+    ));
     let config: Settings = get_configuration().expect("configuration to be read");
 
     let connection = PgPool::connect(&config.database.connection_string())

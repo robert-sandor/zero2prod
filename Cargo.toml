@@ -15,7 +15,6 @@ name = "zero2prod"
 actix-web = "4"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"]}
 serde = { version = "1", features = ["derive"]}
-sqlx = { version = "0.6", default-features = false, features = ["runtime-tokio-rustls", "macros", "postgres", "uuid", "chrono", "migrate"] }
 config = "0.13.3"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
@@ -25,6 +24,19 @@ tracing-bunyan-formatter = "0.3"
 tracing-log = "0.1"
 secrecy = { version = "0.8", features = ["serde"] }
 tracing-actix-web = "0.7"
+
+[dependencies.sqlx]
+version = "0.6"
+default-features = false
+features = [
+  "runtime-tokio-rustls",
+  "macros",
+  "postgres",
+  "uuid",
+  "chrono",
+  "migrate",
+  "offline"
+]
 
 [dev-dependencies]
 reqwest = "0.11"

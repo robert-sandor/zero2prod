@@ -17,10 +17,15 @@ async fn main() -> Result<(), std::io::Error> {
     ));
     let config: Settings = get_configuration().expect("configuration to be read");
 
-    let connection = PgPool::connect(&config.database.connection_string().expose_secret())
-        .await
+    tracing::info!(
+        "Starting server on host {} port {}",
+        config.app.host,
+        config.app.port
+    );
+
+    let connection = PgPool::connect_lazy(&config.database.connection_string().expose_secret())
         .expect("to connect to the databse");
 
-    let listener = TcpListener::bind(format!("127.0.0.1:{}", config.port))?;
+    let listener = TcpListener::bind(format!("{}:{}", config.app.host, config.app.port))?;
     run(listener, connection)?.await
 }

@@ -28,6 +28,7 @@ pub async fn subscribe(form: web::Form<FormData>, pool: web::Data<PgPool>) -> im
             HttpResponse::InternalServerError()
         }
     }
+    .await
 }
 
 #[tracing::instrument(

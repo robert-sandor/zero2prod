@@ -26,11 +26,6 @@ async fn health_check_works() {
 #[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {
     let test_app = spawn_app().await;
-    let config = get_configuration().expect("valid configuration");
-    let connection_string = config.database.connection_string();
-    let mut connection = PgConnection::connect(&connection_string.expose_secret())
-        .await
-        .expect("connect to postgresql");
     let client = reqwest::Client::new();
 
     let mut form = HashMap::new();
@@ -47,7 +42,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     assert_eq!(200, response.status().as_u16());
 
     let saved = sqlx::query!("select email, name from subscriptions")
-        .fetch_one(&mut connection)
+        .fetch_one(&test_app.db_pool)
         .await
         .expect("to read a subscription");
 
@@ -65,7 +60,7 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
         (None, None, "missing both name and email"),
     ];
 
-    for (name, email, error_message) in test_cases {
+    for (name, email, _error_message) in test_cases {
         let mut form = HashMap::new();
         form.insert("name", name);
         form.insert("email", email);
@@ -83,19 +78,6 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
             "the api did not fail with 400 Bad Request with payload={:?}",
             form
         );
-
-        // let response_body = std::str::from_utf8(
-        //     response
-        //         .bytes()
-        //         .await
-        //         .expect("to have a response body")
-        //         .(),
-        // );
-        // assert_eq!(
-        //     error_message, response_body,
-        //     "the api did not return the expected error message '{}' got '{}' instead",
-        //     error_message, response_body
-        // );
     }
 }
 

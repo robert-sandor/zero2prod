@@ -81,6 +81,37 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
     }
 }
 
+#[tokio::test]
+async fn subscribe_returns_400_with_bad_or_empty_data() {
+    let test_app = spawn_app().await;
+    let client = reqwest::Client::new();
+    let test_cases = vec![
+        ("test name", "", "missing the email"),
+        ("", "testname@gmail.com", "missing the name"),
+        ("", "", "missing both name and email"),
+    ];
+
+    for (name, email, _error_message) in test_cases {
+        let mut form = HashMap::new();
+        form.insert("name", name);
+        form.insert("email", email);
+
+        let response = client
+            .post(format!("{}/subscriptions", test_app.address))
+            .form(&form)
+            .send()
+            .await
+            .expect("request to be succesful");
+
+        assert_eq!(
+            400,
+            response.status().as_u16(),
+            "the api did not fail with 400 Bad Request with payload={:?}",
+            form
+        );
+    }
+}
+
 static TRACING: Lazy<()> = Lazy::new(|| {
     let default_filter_level = "info".to_string();
     let subscriber_name = "test".to_string();

@@ -1,9 +1,6 @@
-use actix_web::{web, HttpResponse, Responder};
-use chrono::Utc;
-use sqlx::PgPool;
-use uuid::Uuid;
-
 use crate::domain::NewSubscriber;
+use actix_web::{web, HttpResponse, Responder};
+use sqlx::PgPool;
 
 #[derive(serde::Deserialize)]
 pub struct FormData {
